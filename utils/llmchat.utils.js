@@ -28,13 +28,6 @@ async function getGeminiMedicalAssistance(query, conversationHistory) {
     },
   });
 
-  // const chat = model.startChat({
-  //     conversationHistory, // formatted history passed here
-  //     generationConfig: {
-  //       maxOutputTokens: 500,
-  //     },
-  //   });
-
   const result = await chat.sendMessage(query);
   return result.response.text();
 }
