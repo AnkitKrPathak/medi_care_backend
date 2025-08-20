@@ -17,28 +17,57 @@ exports.registerDoctor = async (req, res) => {
       consultationFee,
       bio,
       location,
-      workingHours,
-      availableDays,
+      workingHours, // Expected as JSON string: {"startTime": "09:00", "endTime": "17:00"}
+      availableDays  // Expected as JSON string: ["Monday", "Wednesday"]
     } = req.body;
 
-    const photo = req.files['photo']?.[0]?.filename || null;
-    const degreeDocs = req.files['degreeDocs']?.map(file => file.filename) || [];
+    // Parse workingHours and availableDays from JSON strings
+    let parsedWorkingHours;
+    let parsedAvailableDays;
 
-    if (!photo || degreeDocs.length === 0) {
-      return res.status(400).json({ message: 'Photo and degree documents are required.' });
+    try {
+      parsedWorkingHours = JSON.parse(workingHours);
+      parsedAvailableDays = JSON.parse(availableDays);
+    } catch (err) {
+      return res.status(400).json({ message: 'Invalid JSON format for workingHours or availableDays' });
     }
 
+    // Validate workingHours: must contain startTime and endTime in 24-hour format
+    const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+    if (
+      !parsedWorkingHours.startTime ||
+      !parsedWorkingHours.endTime ||
+      !timeRegex.test(parsedWorkingHours.startTime) ||
+      !timeRegex.test(parsedWorkingHours.endTime)
+    ) {
+      return res.status(400).json({ message: 'Working hours must be in 24-hour format (HH:mm)' });
+    }
+
+    // Validate availableDays: must be a non-empty array
+    if (!Array.isArray(parsedAvailableDays) || parsedAvailableDays.length === 0) {
+      return res.status(400).json({ message: 'Available days must be a non-empty array' });
+    }
+
+    // Handle file uploads using req.files
+    const photo = req.files?.photo?.[0]?.filename || null;
+    const degreeDocs = req.files?.degreeDocs?.map(file => file.filename) || [];
+
+    // Validate required files
+    if (!photo || degreeDocs.length === 0) {
+      return res.status(400).json({ message: 'Photo and degree documents are required' });
+    }
+
+    // Hash the password for security
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(req.body.password, salt);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-    const parsedWorkingHours = JSON.parse(workingHours);
-    const parsedAvailableDays = JSON.parse(availableDays);
-
+    // Create the new doctor record
     const doctor = new Doctor({
       fullName,
       email,
       phone,
-      password: hashedPassword, // (We'll hash later during auth)
+      password: hashedPassword,
       photo,
       degreeDocs,
       specialty,
@@ -47,15 +76,17 @@ exports.registerDoctor = async (req, res) => {
       bio,
       location,
       workingHours: parsedWorkingHours,
-      availableDays: parsedAvailableDays,
+      availableDays: parsedAvailableDays
     });
 
+    // Save the doctor to the database
     await doctor.save();
 
     res.status(201).json({
       message: 'Doctor registered successfully',
-      doctorId: doctor._id,
+      doctorId: doctor._id
     });
+
   } catch (err) {
     console.error('Registration Error:', err);
     res.status(500).json({ message: 'Server error during registration' });
@@ -121,27 +152,35 @@ exports.getDoctorsBySpecialty = async (req, res) => {
   }
 };
 
-// Search doctors by name, location, or availability
 exports.searchDoctors = async (req, res) => {
   try {
-    const { name, location, time } = req.query;
+    console.log('Received query parameters:', req.query);
+    const { name, location, time, specialization, date } = req.query;
 
     const query = {};
 
+    // Filter by name (case-insensitive)
     if (name) {
-      query.fullName = { $regex: name, $options: 'i' }; // case-insensitive
+      query.fullName = { $regex: name, $options: 'i' };
     }
 
+    // Filter by location (case-insensitive)
     if (location) {
       query.location = { $regex: location, $options: 'i' };
+    }
+
+    // Filter by specialization (case-insensitive)
+    if (specialization) {
+      query.specialty = { $regex: specialization, $options: 'i' };
     }
 
     const allDoctors = await Doctor.find(query);
 
     let filteredDoctors = allDoctors;
 
+    // Filter by time (working hours of the doctor)
     if (time) {
-      filteredDoctors = allDoctors.filter((doctor) => {
+      filteredDoctors = filteredDoctors.filter((doctor) => {
         const start = doctor.workingHours?.startTime;
         const end = doctor.workingHours?.endTime;
 
@@ -151,15 +190,25 @@ exports.searchDoctors = async (req, res) => {
       });
     }
 
+    // If a date is provided, filter by availability on that specific date
+    if (date) {
+      filteredDoctors = filteredDoctors.filter((doctor) => {
+        const availableDates = doctor.availableDates || []; // assuming the doctor has an array of available dates
+        return availableDates.includes(date);
+      });
+    }
+
+    // If no doctors match the filters, return 404
     if (filteredDoctors.length === 0) {
       return res.status(404).json({ message: 'No matching doctors found' });
     }
 
+    // Remove sensitive information (like password) from the results
     const doctorsWithoutPasswords = filteredDoctors.map((doc) => {
       const { password, ...rest } = doc.toObject();
       return rest;
     });
-    
+
     res.status(200).json(doctorsWithoutPasswords);
   } catch (error) {
     console.error('Search Doctors Error:', error);

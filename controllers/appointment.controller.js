@@ -1,22 +1,45 @@
 const Appointment = require('../models/Appointment');
 const moment = require('moment');
 
+const Patient = require('../models/Patient');
+const Doctor = require('../models/Doctor');
+
 const bookAppointment = async (req, res) => {
   try {
     const {
-      doctor,
-      patient,
+      doctor, // doctor ID
+      patient, // patient ID
       appointmentDate,
       appointmentTime,
       reason,
     } = req.body;
 
-    // Optional: Check for conflict (same doctor, date & time)
+    // Log the incoming data to ensure correct values are being passed
+    console.log("Received data:", req.body);
+
+    // Validate required fields
+    if (!doctor || !patient || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({ message: 'Missing required fields.' });
+    }
+
+    // Optional: Check if patient exists
+    const patientExists = await Patient.findById(patient);
+    if (!patientExists) {
+      return res.status(404).json({ message: 'Patient not found.' });
+    }
+
+    // Optional: Check if doctor exists
+    const doctorExists = await Doctor.findById(doctor); // Ensure the `doctor` is an ID, not a name
+    if (!doctorExists) {
+      return res.status(404).json({ message: 'Doctor not found.' });
+    }
+
+    // Check for appointment conflicts (same doctor, same time)
     const existing = await Appointment.findOne({
       doctor,
       appointmentDate,
       appointmentTime,
-      status: { $ne: 'Cancelled' }, // Ignore cancelled slots
+      status: { $ne: 'Cancelled' },
     });
 
     if (existing) {
@@ -25,6 +48,7 @@ const bookAppointment = async (req, res) => {
       });
     }
 
+    // Create appointment
     const appointment = new Appointment({
       doctor,
       patient,
@@ -41,7 +65,7 @@ const bookAppointment = async (req, res) => {
     });
   } catch (error) {
     console.error('Booking Error:', error);
-    res.status(500).json({ message: 'Server Error' });
+    res.status(500).json({ message: 'Server Error', error: error.message });
   }
 };
 
@@ -158,4 +182,3 @@ module.exports = {
   getAppointmentsForPatient,
   updateMedicalRecord
 };
-

@@ -12,6 +12,7 @@ const appointmentRoutes = require('./routes/appointment.routes');
 const medicalHistoryRoutes = require('./routes/medical.routes');
 const emergencyRoutes = require('./routes/emergency.routes');
 const adminRoutes = require('./routes/admin.routes');
+const aiRoutes = require('./routes/ai.routes');
 
 // Middleware
 const errorHandler = require('./middlewares/error.middleware');
@@ -34,6 +35,7 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/medical-history', medicalHistoryRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ai', aiRoutes);
 
 // Health check
 app.get('/', (req, res) => {

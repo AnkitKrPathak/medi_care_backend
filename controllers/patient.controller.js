@@ -80,4 +80,35 @@ const loginPatient = async (req, res) => {
   }
 };
 
-module.exports = { registerPatient, loginPatient };
+
+// Get logged-in patient details
+const getLoggedInPatient = async (req, res) => {
+  try {
+    // Fetch patient details using the ID from JWT token
+    const patient = await Patient.findById(req.user.id).select('-password');
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found' });
+    }
+
+    res.status(200).json({
+      _id: patient._id,
+      name: patient.fullName,
+      email: patient.email,
+      phone: patient.phone,
+      dateOfBirth: patient.dateOfBirth,
+      gender: patient.gender,
+      address: patient.address,
+      profilePhoto: patient.profilePhoto,
+    });
+  } catch (err) {
+    console.error('Error fetching logged-in patient:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+// Export functions for use in routes
+module.exports = {
+  registerPatient,
+  loginPatient,
+  getLoggedInPatient,
+};
